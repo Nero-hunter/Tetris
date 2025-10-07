@@ -1,315 +1,264 @@
-const COLS = 10, ROWS = 20;
-const EMPTY = 0;
-const SCORE_TABLE = { 1: 100, 2: 300, 3: 500, 4: 800 };
-let bag = [];
-let cur = null;
-let nextPiece = null;
-let score = 0, lines = 0, level = 1;
-let dropIntervalPerLevel= 800;
-let timer = null;
-let paused = false;
-let gameOver = false;
-
-const COLORS = { I: 'cI', O: 'cO', T: 'cT', S: 'cS', Z: 'cZ', J: 'cJ', L: 'cL' };
-
-const rotBase = (mat3) => {
-    const to4 = (shape) => {
-        const topLine = [0, 0, 0, 0];
-        return [
-            [...topLine],
-            [0, ...shape[0]],
-            [0, ...shape[1]],
-            [0, ...shape[2]],
-        ];
+(function () {
+    const COLS = 10;
+    const ROWS = 20;
+    const BLOCK = 24;
+    const EMPTY = 0;
+    const COLORS = { I: "#5ce1e6", J: "#5c7cff", L: "#ff9f5c", O: "#ffd166", S: "#39d98a", T: "#b084ff", Z: "#ff5c7a", G: "#223447" };
+    const SHAPES = {
+        I: [
+            [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
+            [[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]],
+            [[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0]],
+            [[0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]],
+        ],
+        J: [
+            [[1, 0, 0], [1, 1, 1], [0, 0, 0]],
+            [[0, 1, 1], [0, 1, 0], [0, 1, 0]],
+            [[0, 0, 0], [1, 1, 1], [0, 0, 1]],
+            [[0, 1, 0], [0, 1, 0], [1, 1, 0]],
+        ],
+        L: [
+            [[0, 0, 1], [1, 1, 1], [0, 0, 0]],
+            [[0, 1, 0], [0, 1, 0], [0, 1, 1]],
+            [[0, 0, 0], [1, 1, 1], [1, 0, 0]],
+            [[1, 1, 0], [0, 1, 0], [0, 1, 0]],
+        ],
+        O: [[[1, 1], [1, 1]], [[1, 1], [1, 1]], [[1, 1], [1, 1]], [[1, 1], [1, 1]]],
+        S: [
+            [[0, 1, 1], [1, 1, 0], [0, 0, 0]],
+            [[0, 1, 0], [0, 1, 1], [0, 0, 1]],
+            [[0, 0, 0], [0, 1, 1], [1, 1, 0]],
+            [[1, 0, 0], [1, 1, 0], [0, 1, 0]],
+        ],
+        T: [
+            [[0, 1, 0], [1, 1, 1], [0, 0, 0]],
+            [[0, 1, 0], [0, 1, 1], [0, 1, 0]],
+            [[0, 0, 0], [1, 1, 1], [0, 1, 0]],
+            [[0, 1, 0], [1, 1, 0], [0, 1, 0]],
+        ],
+        Z: [
+            [[1, 1, 0], [0, 1, 1], [0, 0, 0]],
+            [[0, 0, 1], [0, 1, 1], [0, 1, 0]],
+            [[0, 0, 0], [1, 1, 0], [0, 1, 1]],
+            [[0, 1, 0], [1, 1, 0], [1, 0, 0]],
+        ],
     };
-    const base = to4(mat3);
 
-    const rotateshapt = (shape) => {
-        const shapeRank = shape.length, output = Array.from({ length: shapeRank }, () => Array(shapeRank).fill(0));
-        for (let y = 0; y < shapeRank; y++) for (let x = 0; x < shapeRank; x++) output[x][shapeRank - 1 - y] = shape[y][x];
-        return output;
-    };
-    return [base, rotateshapt(base), rotateshapt(rotateshapt(base)), rotateshapt(rotateshapt(rotateshapt(base)))];
-}
-
-const SHAPES = {
-    L: rotBase([[0, 0, 1], [1, 1, 1], [0, 0, 0]]),
-    S: rotBase([[0, 1, 1], [1, 1, 0], [0, 0, 0]]),
-    T: rotBase([[0, 1, 0], [1, 1, 1], [0, 0, 0]]),
-    J: rotBase([[1, 0, 0], [1, 1, 1], [0, 0, 0]]),
-    Z: rotBase([[1, 1, 0], [0, 1, 1], [0, 0, 0]]),
-    O: [
-        [[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]],
-    ],
-    I: [
-        [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
-        [[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]],
-        [[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0]],
-        [[0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]],
-    ]
-};
-
-const createInitGameBoard = () => { return Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY)); }
-
-let board = createInitGameBoard();
-
-const makeNewBag = () => {
-    const shuffledShape = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
-
-    //Make array to random using fisher-yates algorithm>>>>>
-    for (let i = shuffledShape.length - 1; i > 0; i--) {
-        const j = (Math.random() * (i + 1)) | 0;
-        [shuffledShape[i], shuffledShape[j]] = [shuffledShape[j], shuffledShape[i]];
+    function createMatrix(cols, rows) { return Array.from({ length: rows }, () => Array(cols).fill(EMPTY)); }
+    function cloneMatrix(m) { return m.map(r => r.slice()); }
+    function bagRandomizer() { const types = Object.keys(SHAPES); let bag = []; function refill() { bag = types.slice(); for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[bag[i], bag[j]] = [bag[j], bag[i]]; } } refill(); return () => { if (!bag.length) refill(); return bag.pop(); }; }
+    function merge(board, piece) { for (let y = 0; y < piece.shape.length; y++) { for (let x = 0; x < piece.shape[y].length; x++) { if (piece.shape[y][x]) { const by = y + piece.y, bx = x + piece.x; if (by >= 0 && by < ROWS && bx >= 0 && bx < COLS) board[by][bx] = piece.type; } } } }
+    function collide(board, piece) { for (let y = 0; y < piece.shape.length; y++) { for (let x = 0; x < piece.shape[y].length; x++) { if (!piece.shape[y][x]) continue; const by = y + piece.y, bx = x + piece.x; if (bx < 0 || bx >= COLS || by >= ROWS) return true; if (by >= 0 && board[by][bx] !== EMPTY) return true; } } return false; }
+    function clearLines(board) { let cleared = 0; outer: for (let y = ROWS - 1; y >= 0; y--) { for (let x = 0; x < COLS; x++) if (board[y][x] === EMPTY) continue outer; board.splice(y, 1); board.unshift(Array(COLS).fill(EMPTY)); cleared++; y++; } return cleared; }
+    function scoreFor(lines) { switch (lines) { case 1: return 100; case 2: return 300; case 3: return 500; case 4: return 800; default: return 0; } }
+    function createPiece(nextGen) { const type = nextGen(); return { type, rot: 0, shape: SHAPES[type][0], x: 3, y: -2 }; }
+    function ghostY(board, piece) { const t = { ...piece }; while (!collide(board, { ...t, y: t.y + 1 })) t.y++; return t.y; }
+    function drawBoard(ctx, board) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (board[y][x] !== EMPTY) drawBlock(ctx, x, y, COLORS[board[y][x]] || COLORS.G); }
+    function drawBlock(ctx, x, y, color, alpha = 1) {
+        const px = x * 24, py = y * 24;
+        ctx.globalAlpha = alpha;
+        // fill
+        ctx.fillStyle = color;
+        ctx.fillRect(px, py, 24, 24);
+        // bevel
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(px, py, 24, 3);
+        ctx.fillRect(px, py, 3, 24);
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        ctx.fillRect(px, py + 21, 24, 3);
+        ctx.fillRect(px + 21, py, 3, 24);
+        // crisp border (grid outline)
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#0a0f15";
+        ctx.strokeRect(px + 0.5, py + 0.5, 23, 23);
+        ctx.globalAlpha = 1;
     }
-    bag = shuffledShape;
-}
-
-
-const spawn = () => {
-    if (bag.length === 0) makeNewBag();
-    const TYPE = nextPiece ?? bag.pop();
-
-    cur = { type: TYPE, x: 3, y: 0, r: 0 };
-
-    if (bag.length === 0) makeNewBag();
-    nextPiece = bag.pop()
-
-
-    if (!canPlace(cur.type, cur.x, cur.y, cur.r)) {
-        gameOver = true;
-        stop();
-        alert("Game Over!!!!!!!");
-    }
-    drawShapeToNextPieceBoard();
-}
-
-
-const drawShapeToNextPieceBoard = () => {
-    const type = nextPiece;
-    const shape = SHAPES[type][0];
-    drawNextStepShape(nextPieceBoard, shape, COLORS[type], shape[0].length, shape.length);
-}
-
-const drawNextStepShape = (nextPieceBoard, shape, colorClass, gridW, gridH) => {
-    const cells = nextPieceBoard.children;
-    for (let i = 0; i < gridW * gridH; i++) cells[i].className = 'cell';
-    for (let y = 0; y < shape.length; y++) {
-        for (let x = 0; x < shape[y].length; x++) {
-            if (shape[y][x]) {
-                const indexOfCell = y * gridW + x;
-                const cell = cells[indexOfCell];
-                if (cell) cell.className = `cell ${colorClass}`;
+    function drawGrid(ctx) {
+        ctx.save();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#0a0f15";
+        for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+                const px = x * 24, py = y * 24;
+                ctx.strokeRect(px + 0.5, py + 0.5, 23, 23);
             }
         }
+        ctx.restore();
     }
-}
+    function drawPiece(ctx, p, gy) { if (gy != null) { for (let y = 0; y < p.shape.length; y++) for (let x = 0; x < p.shape[y].length; x++) if (p.shape[y][x]) drawBlock(ctx, p.x + x, gy + y, COLORS[p.type], 0.15); } for (let y = 0; y < p.shape.length; y++) for (let x = 0; x < p.shape[y].length; x++) if (p.shape[y][x]) drawBlock(ctx, p.x + x, p.y + y, COLORS[p.type]); }
+    function drawNext(ctx, type) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); if (!type) return; const shape = SHAPES[type][0], color = COLORS[type]; const offsetX = Math.floor((4 - shape[0].length) * 0.5); for (let y = 0; y < shape.length; y++) for (let x = 0; x < shape[y].length; x++) if (shape[y][x]) { const px = (x + offsetX) * 16 + 12, py = y * 16 + 10; ctx.fillStyle = color; ctx.fillRect(px, py, 16, 16); ctx.strokeStyle = "#0a0f15"; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, py + 0.5, 15, 15); ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(px, py, 16, 2); ctx.fillRect(px, py, 2, 16); ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fillRect(px, py + 14, 16, 2); ctx.fillRect(px + 14, py, 2, 16); } }
 
+    function createGame(canvas, nextCanvas, scoreEl, linesEl, levelEl, overlayEl, isBot, hooks) {
+        const ctx = canvas.getContext("2d"); ctx.imageSmoothingEnabled = false;
+        const nextCtx = nextCanvas.getContext("2d");
+        const rand = bagRandomizer();
+        let board = createMatrix(COLS, ROWS);
+        let current = createPiece(rand);
+        let next = createPiece(rand).type;
+        let dropCounter = 0, dropInterval = 1000, lastTime = 0;
+        let running = false, gameOver = false;
+        let score = 0, lines = 0, level = 1;
+        let botPlan = null, botMoveTimer = 0;
 
-const shapeAtRoate = (type, r) => { return SHAPES[type][r % SHAPES[type].length]; }
-
-const rotateCW = () => {
-    if (gameOver || paused) return;
-    const nr = (cur.r + 1) % SHAPES[cur.type].length;
-    const kicks = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0]];
-    for (const [kx, ky] of kicks) {
-        if (canPlace(cur.type, cur.x + kx, cur.y + ky, nr)) {
-            cur.r = nr; cur.x += kx; cur.y += ky; render(); return;
+        function updateHUD() { scoreEl.textContent = score; linesEl.textContent = lines; levelEl.textContent = level; hooks?.onState?.({ score, lines, level }); }
+        function spawn() { current = { type: next, rot: 0, shape: SHAPES[next][0], x: 3, y: -2 }; next = createPiece(rand).type; drawNext(nextCtx, next); if (collide(board, current)) { running = false; gameOver = true; hooks?.onGameOver?.({ score, lines, level }); } if (isBot) botPlan = null; }
+        function setLevel() { const newLevel = Math.floor(lines / 10) + 1; if (newLevel !== level) { level = newLevel; if (!isBot) { dropInterval = Math.max(120, 1000 - (level - 1) * 90); } } }
+        function hardDrop() { while (!collide(board, { ...current, y: current.y + 1 })) current.y++; lockPiece(); }
+        function isGarbageRow(row) {
+            let empties = 0;
+            for (let i = 0; i < COLS; i++) {
+                if (row[i] === EMPTY) empties++;
+                else if (row[i] !== 'G') return false;
+            }
+            return empties === 1; // generated garbage has exactly one hole
         }
-    }
-}
-
-const canPlace = (type, x, y, r) => {
-    let shape = shapeAtRoate(type, r)
-    for (let sy = 0; sy < shape.length; sy++) {
-        for (let sx = 0; sx < shape[sy].length; sx++) {
-            if (!shape[sy][sx]) continue;
-            const nx = x + sx, ny = y + sy;
-            if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return false;
-            if (board[ny][nx] !== EMPTY) return false;
+        function removeGarbageRows(maxCount) {
+            let removed = 0;
+            for (let y = ROWS - 1; y >= 0 && removed < maxCount; y--) {
+                if (isGarbageRow(board[y])) { board.splice(y, 1); board.unshift(Array(COLS).fill(EMPTY)); removed++; y++; }
+            }
+            return removed;
         }
+        function pieceOverflowsTop(p) { for (let y = 0; y < p.shape.length; y++) { for (let x = 0; x < p.shape[y].length; x++) { if (p.shape[y][x] && (p.y + y) < 0) return true; } } return false; }
+        function lockPiece() {
+            // If the piece would lock with blocks above visible area, it's a top-out
+            if (pieceOverflowsTop(current)) { running = false; gameOver = true; hooks?.onGameOver?.({ score, lines, level }); return; }
+            merge(board, current);
+            const cleared = clearLines(board);
+            if (cleared) {
+                score += scoreFor(cleared) * level;
+                lines += cleared;
+                setLevel();
+                const cancelled = removeGarbageRows(cleared);
+                const send = Math.max(0, cleared - cancelled);
+                hooks?.onLinesCleared?.(send);
+            }
+            spawn();
+            updateHUD();
+        }
+        function receiveGarbage(count) {
+            if (gameOver) return;
+            for (let i = 0; i < count; i++) {
+                const hole = Math.floor(Math.random() * COLS);
+                // remove top row and push a garbage row at the bottom
+                board.shift();
+                const row = Array(COLS).fill('G');
+                row[hole] = EMPTY;
+                board.push(row);
+            }
+            // If current piece now collides due to push-up, try shifting upward
+            while (collide(board, current) && current.y > -6) current.y -= 1;
+            if (collide(board, current)) { // still colliding even above hidden rows
+                running = false; gameOver = true; hooks?.onGameOver?.({ score, lines, level }); return;
+            }
+            updateHUD();
+        }
+        function move(dir) { const t = { ...current, x: current.x + dir }; if (!collide(board, t)) current = t; }
+        function rotate(dir) { const nr = (current.rot + (dir > 0 ? 1 : 3)) % 4; const r = { ...current, rot: nr, shape: SHAPES[current.type][nr] }; for (const k of [0, -1, 1, -2, 2]) { const t = { ...r, x: current.x + k }; if (!collide(board, t)) { current = t; return; } } }
+        function drop() { const t = { ...current, y: current.y + 1 }; if (!collide(board, t)) current = t; else lockPiece(); }
+        function draw() { drawBoard(ctx, board); drawGrid(ctx); const gy = ghostY(board, current); drawPiece(ctx, current, gy); }
+        function update(time = 0) {
+            if (!running) { lastTime = time; requestAnimationFrame(update); return; }
+            const delta = time - lastTime; lastTime = time;
+            if (isBot) { const s = Number(document.getElementById("botSpeed").value); dropInterval = Math.max(60, s || 300); }
+            dropCounter += delta;
+            if (dropCounter > dropInterval) { drop(); dropCounter = 0; }
+            draw();
+            if (isBot && !gameOver) botUpdate(delta);
+            requestAnimationFrame(update);
+        }
+        function evaluate(bd) { const heights = Array(COLS).fill(0); for (let x = 0; x < COLS; x++) { for (let y = 0; y < ROWS; y++) if (bd[y][x] !== EMPTY) { heights[x] = ROWS - y; break; } } let holes = 0; for (let x = 0; x < COLS; x++) { let seen = false; for (let y = 0; y < ROWS; y++) { if (bd[y][x] !== EMPTY) seen = true; else if (seen) holes++; } } let bump = 0; for (let x = 0; x < COLS - 1; x++) bump += Math.abs(heights[x] - heights[x + 1]); let agg = heights.reduce((a, b) => a + b, 0); let linesC = 0; for (let y = 0; y < ROWS; y++) if (bd[y].every(v => v !== EMPTY)) linesC++; return { aggregateHeight: agg, holes, bumpiness: bump, linesCleared: linesC }; }
+        function bScore(e, d) { const W = { easy: { h: -0.45, holes: -0.9, bump: -0.15, lines: 1.0 }, medium: { h: -0.52, holes: -1.0, bump: -0.25, lines: 1.4 }, hard: { h: -0.58, holes: -1.2, bump: -0.35, lines: 1.8 } }; const w = W[d] || W.medium; return e.aggregateHeight * w.h + e.holes * w.holes + e.bumpiness * w.bump + e.linesCleared * w.lines; }
+        function computePlan() { const diff = document.getElementById("botDifficulty").value; let best = null; for (let rot = 0; rot < 4; rot++) { const shape = SHAPES[current.type][rot]; for (let x = -2; x < COLS; x++) { const test = { type: current.type, rot, shape, x, y: -2 }; while (!collide(board, { ...test, y: test.y + 1 })) test.y++; if (collide(board, test)) continue; const bd = cloneMatrix(board); merge(bd, test); const cleared = clearLines(bd); const ev = evaluate(bd); ev.linesCleared = cleared; const s = bScore(ev, diff); if (!best || s > best.score) best = { score: s, rot, x }; } } return best; }
+        function botUpdate(delta) { if (!botPlan) botPlan = computePlan(); if (!botPlan) return; const speed = Number(document.getElementById("botSpeed").value); botMoveTimer += delta; const step = Math.max(70, speed); if (botMoveTimer >= step) { botMoveTimer = 0; if (current.rot !== botPlan.rot) rotate(1); else if (current.x < botPlan.x) move(1); else if (current.x > botPlan.x) move(-1); else { if (!collide(board, { ...current, y: current.y + 1 })) current.y += 1; else lockPiece(); } } }
+        function start() { if (gameOver) return; running = true; overlayEl.classList.remove("show"); }
+        function pause() { running = false; }
+        function restart() { board = createMatrix(COLS, ROWS); current = createPiece(rand); next = createPiece(rand).type; lastTime = 0; dropCounter = 0; dropInterval = isBot ? Math.max(60, Number(document.getElementById("botSpeed").value) || 300) : 1000; score = 0; lines = 0; level = 1; running = false; gameOver = false; botPlan = null; botMoveTimer = 0; updateHUD(); drawNext(nextCtx, next); overlayEl.classList.add("show"); overlayEl.textContent = "PAUSED"; hooks?.onRestart?.(); }
+        return { update, start, pause, restart, move, rotate, drop, hardDrop, receiveGarbage, get state() { return { running, gameOver, score, lines, level }; } };
     }
-    return true
-}
 
-const lockPiece = () => {
-    const s = shapeAtRoate(cur.type, cur.r);
-    for (let sy = 0; sy < s.length; sy++) {
-        for (let sx = 0; sx < s[sy].length; sx++) {
-            if (!s[sy][sx]) continue;
-            const nx = cur.x + sx, ny = cur.y + sy;
-            if (ny >= 0 && ny < ROWS && nx >= 0 && nx < COLS) {
-                board[ny][nx] = cur.type;
+    // Create games with hooks
+    const modal = document.getElementById('matchModal');
+    const winnerText = document.getElementById('winnerText');
+    const mhScore = document.getElementById('mhScore');
+    const mbScore = document.getElementById('mbScore');
+    let finished = false;
+
+    function openModal(h, b) { mhScore.textContent = h; mbScore.textContent = b; if (h > b) { winnerText.textContent = 'Human wins!'; } else if (b > h) { winnerText.textContent = 'Bot wins!'; } else { winnerText.textContent = 'Draw!'; } modal.classList.add('show'); }
+    function showToast(text) { const t = document.getElementById('toast'); if (!t) return; t.textContent = text; t.classList.add('show'); clearTimeout(showToast._id); showToast._id = setTimeout(() => t.classList.remove('show'), 2500); }
+    function closeModal() { modal.classList.remove('show'); }
+
+    const human = createGame(
+        document.getElementById('humanBoard'),
+        document.getElementById('hNext'),
+        document.getElementById('hScore'),
+        document.getElementById('hLines'),
+        document.getElementById('hLevel'),
+        document.getElementById('humanOverlay'),
+        false,
+        {
+            onGameOver: ({ score }) => {
+                if (!finished) {
+                    finished = true;
+                    bot.pause();
+                    human.pause();
+                    showToast('Game Over!!! Human side finished');
+                    openModal(score, Number(document.getElementById('bScore').textContent));
+                }
+            },
+            onLinesCleared: (cleared) => {
+                // Send exactly the number of lines cleared as garbage
+                if (cleared > 0) bot.receiveGarbage(cleared);
             }
         }
-    }
-    const cleared = clearLines();
-    if (cleared > 0) {
-        score += SCORE_TABLE[cleared] || 0;
-        lines += cleared;
+    );
+    human.update();
 
-        const newLevel = Math.floor(lines / 10) + 1;
-        if (newLevel !== level) {
-            level = newLevel;
-            dropIntervalPerLevel = Math.max(120, 800 - (level - 1) * 60);
-            restartLoopIfRunning();
-        }
-        updateStats();
-    }
-    spawn();
-    render();
-}
-
-
-const clearLines = () => {
-    let cleared = 0;
-    for (let y = ROWS - 1; y >= 0; y--) {
-        if (board[y].every(value => value !== EMPTY)) {
-
-            board.splice(y, 1);
-            board.unshift(Array(COLS).fill(EMPTY));
-            cleared++; y++;
-        }
-    }
-    return cleared;
-}
-
-const tick = () => {
-    if (paused || gameOver) return;
-
-    if (!move(0, 1)) lockPiece();
-}
-
-document.addEventListener('keydown', (e) => {
-    if (gameOver) return;
-    switch (e.key) {
-        case 'a': move(-1, 0); break;
-        case 'd': move(1, 0); break;
-        case 'f': move(0, 1); break;
-        case 's': rotateCW(); break;
-        case 'z': e.preventDefault(); hardDrop(); break;
-        case 'p': case 'P': togglePause(); break;
-        case 'r': case 'R': reset(); start(); break;
-    }
-});
-
-const move = (dx, dy) => {
-    if (gameOver || paused) return;
-    console.log(cur, '🤣🤣🤣🤣🤣🤣')
-    const nx = cur.x + dx, ny = cur.y + dy;
-    if (canPlace(cur.type, nx, ny, cur.r)) {
-        cur.x = nx; cur.y = ny; render();
-        return true;
-    }
-    return false;
-}
-
-const hardDrop = () => {
-    if (gameOver || paused) return;
-    while (move(0, 1)) { }
-    lockPiece();
-}
-
-const togglePause = () => {
-    if (paused) {
-        paused = false;
-
-        restartLoopIfRunning();
-    }
-    else {
-        paused = true; stop();
-    }
-    console.log(paused)
-}
-
-const stop = () => {
-    clearInterval(timer); timer = null;
-}
-const restartLoopIfRunning = () => {
-    stop(); timer = setInterval(tick, dropIntervalPerLevel);
-
-}
-
-const reset = () => {
-    stop();
-    board = createInitGameBoard();
-    bag = []; cur = null; nextPiece = null;
-    score = 0; lines = 0; level = 1; dropIntervalPerLevel = 800;
-    paused = false; gameOver = false;
-    updateStats();
-    buildBoardDOM();
-    buildNextDOM();
-}
-
-const scoreEl = document.getElementById('score');
-const linesEl = document.getElementById('lines');
-const levelEl = document.getElementById('level');
-
-const updateStats = () => {
-    scoreEl.textContent = score;
-    linesEl.textContent = lines;
-    levelEl.textContent = level;
-}
-
-const start = () => {
-    if (timer) return;
-    if (!cur) { makeNewBag(); spawn(); }
-    paused = false; gameOver = false;
-    timer = setInterval(tick, dropIntervalPerLevel);
-}
-
-
-let mainGameBoard = document.getElementById("game-board")
-let nextPieceBoard = document.getElementById("nextPiece-board")
-const buildBoardDOM = () => {
-    mainGameBoard.innerHTML = '';
-    for (let i = 0; i < ROWS * COLS; i++) {
-        const d = document.createElement('div');
-        d.className = 'cell';
-        mainGameBoard.appendChild(d);
-    }
-}
-
-
-const buildNextDOM = () => {
-    nextPieceBoard.innerHTML = '';
-    for (let i = 0; i < 16; i++) {
-        const d = document.createElement('div');
-        d.className = 'cell';
-        nextPieceBoard.appendChild(d);
-    }
-}
-
-
-const render = () => {
-    const cells = mainGameBoard.children;
-    for (let y = 0; y < ROWS; y++) {
-        for (let x = 0; x < COLS; x++) {
-            const idx = y * COLS + x;
-            const el = cells[idx];
-            const v = board[y][x];
-            el.className = 'cell ' + (v ? COLORS[v] : '');
-        }
-    }
-    const s = shapeAtRoate(cur.type, cur.r);
-    for (let sy = 0; sy < s.length; sy++) {
-        for (let sx = 0; sx < s[sy].length; sx++) {
-            if (!s[sy][sx]) continue;
-            const nx = cur.x + sx, ny = cur.y + sy;
-            if (ny >= 0) {
-                const idx = ny * COLS + nx;
-                const el = cells[idx];
-                if (el) el.classList.add(COLORS[cur.type]);
+    const bot = createGame(
+        document.getElementById('botBoard'),
+        document.getElementById('bNext'),
+        document.getElementById('bScore'),
+        document.getElementById('bLines'),
+        document.getElementById('bLevel'),
+        document.getElementById('botOverlay'),
+        true,
+        {
+            onGameOver: ({ score }) => {
+                if (!finished) {
+                    finished = true;
+                    bot.pause();
+                    human.pause();
+                    showToast('Game Over!!! Bot side finished');
+                    openModal(Number(document.getElementById('hScore').textContent), score);
+                }
+            },
+            onLinesCleared: (cleared) => {
+                if (cleared > 0) human.receiveGarbage(cleared);
             }
         }
-    }
-}
+    );
+    bot.update();
 
-document.getElementById('startBtn').onclick = () => {
-    if (!cur) reset();
-    start();
-};
-document.getElementById('pauseBtn').onclick = () => togglePause();
+    document.getElementById('startBtn').addEventListener('click', () => { closeModal(); finished = false; human.start(); bot.start(); document.getElementById('humanOverlay').classList.remove('show'); document.getElementById('botOverlay').classList.remove('show'); });
+    document.getElementById('pauseBtn').addEventListener('click', () => { human.pause(); bot.pause(); document.getElementById('humanOverlay').classList.add('show'); document.getElementById('humanOverlay').textContent = 'PAUSED'; document.getElementById('botOverlay').classList.add('show'); document.getElementById('botOverlay').textContent = 'PAUSED'; });
+    document.getElementById('restartBtn').addEventListener('click', () => { closeModal(); finished = false; human.restart(); bot.restart(); });
+    document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+    document.getElementById('modalPlayBtn').addEventListener('click', () => { closeModal(); finished = false; human.restart(); bot.restart(); human.start(); bot.start(); });
 
+    // Human controls
+    window.addEventListener('keydown', (e) => {
+        const { running, gameOver } = human.state; if (!running || gameOver) return;
+        switch (e.code) {
+            case 'ArrowLeft': e.preventDefault(); human.move(-1); break;
+            case 'ArrowRight': e.preventDefault(); human.move(1); break;
+            case 'ArrowUp': e.preventDefault(); human.rotate(1); break;
+            case 'ArrowDown': e.preventDefault(); human.drop(); break;
+            case 'Space': e.preventDefault(); human.hardDrop(); break;
+        }
+    });
 
-
-updateStats();
+    document.getElementById('humanOverlay').classList.add('show');
+    document.getElementById('humanOverlay').textContent = 'PRESS START';
+    document.getElementById('botOverlay').classList.add('show');
+    document.getElementById('botOverlay').textContent = 'PRESS START';
+})();
